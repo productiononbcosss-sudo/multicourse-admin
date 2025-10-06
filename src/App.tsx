@@ -1,5 +1,6 @@
 import React from 'react';
 import { AuthProvider, useAuth } from './contexts/AuthContext';
+import { LanguageProvider } from './contexts/LanguageContext';
 import LoginScreen from './components/auth/LoginScreen';
 import ClientDashboard from './components/dashboard/ClientDashboard';
 import InstructorDashboard from './components/dashboard/InstructorDashboard';
@@ -32,7 +33,9 @@ const AppContent: React.FC = () => {
 const App: React.FC = () => {
   return (
     <AuthProvider>
-      <AppContent />
+      <LanguageProvider>
+        <AppContent />
+      </LanguageProvider>
     </AuthProvider>
   );
 };

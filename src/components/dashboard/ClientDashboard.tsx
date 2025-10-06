@@ -3,10 +3,12 @@ import { Filter, Trash2, AlertCircle, RefreshCw } from "lucide-react";
 import { useAuth } from "../../contexts/AuthContext";
 import { useQuestions } from "../../hooks/useQuestions";
 import { useCourses } from "../../hooks/useCourses";
+import { useModal } from "../../hooks/useModal";
 import Header from "./Header";
 import QuestionCard from "../questions/QuestionCard";
 import UserManagement from "../users/UserManagement";
 import CourseManagement from "../courses/CourseManagement";
+import Modal from "../common/Modal";
 import { FilterType } from "../../types";
 
 const ClientDashboard: React.FC = () => {
@@ -16,6 +18,7 @@ const ClientDashboard: React.FC = () => {
     userData?.role === "client_support" ? [] : userData?.assignedCourses || [];
   const { questions, loading, approveQuestion, deleteQuestion } =
     useQuestions(userCourses);
+  const { modalState, showSuccess, showError, showWarning, showConfirm, closeModal } = useModal();
 
   const [selectedCourseId, setSelectedCourseId] = useState<string | null>(null);
   const [filterStatus, setFilterStatus] = useState<FilterType>("all");
@@ -72,12 +75,12 @@ const ClientDashboard: React.FC = () => {
           role: userData.role
         } : null
       });
-      alert("Not authenticated. Please refresh the page and try again.");
+      showError("Authentication Error", "Not authenticated. Please refresh the page and try again.");
       return;
     }
 
     if (!questionId) {
-      alert("Invalid question ID");
+      showError("Invalid Question", "Invalid question ID");
       return;
     }
 
@@ -85,44 +88,67 @@ const ClientDashboard: React.FC = () => {
 
     try {
       await approveQuestion(questionId, userId);
-      alert("Question approved!");
+      showSuccess("Success!", "Question approved successfully!");
     } catch (err) {
       console.error("Approve error:", err);
-      alert("Failed to approve: " + (err as Error).message);
+      showError("Approval Failed", "Failed to approve: " + (err as Error).message);
     }
   };
 
   const handleDelete = async (questionId: string | undefined) => {
     if (!questionId) {
-      alert("Invalid question ID");
+      showError("Invalid Question", "Invalid question ID");
       return;
     }
 
-    if (!window.confirm("Are you sure you want to delete this question?"))
-      return;
-
-    try {
-      await deleteQuestion(questionId);
-    } catch (err) {
-      console.error("Error deleting question:", err);
-    }
+    showConfirm(
+      "Delete Question",
+      "Are you sure you want to delete this question? This action cannot be undone.",
+      async () => {
+        try {
+          await deleteQuestion(questionId);
+          showSuccess("Deleted", "Question deleted successfully!");
+        } catch (err) {
+          console.error("Error deleting question:", err);
+          showError("Delete Failed", "Failed to delete question: " + (err as Error).message);
+        }
+      },
+      { confirmText: "Yes, Delete", cancelText: "Cancel" }
+    );
   };
 
   const handleBulkDelete = async () => {
     if (selectedQuestions.size === 0) return;
-    if (!window.confirm(`Delete ${selectedQuestions.size} selected questions?`))
-      return;
-
-    // Fix: Convert Set to Array
-    const questionIds = Array.from(selectedQuestions);
-    for (const questionId of questionIds) {
-      try {
-        await deleteQuestion(questionId);
-      } catch (err) {
-        console.error("Error deleting question:", err);
-      }
-    }
-    setSelectedQuestions(new Set());
+    
+    showConfirm(
+      "Delete Multiple Questions",
+      `Are you sure you want to delete ${selectedQuestions.size} selected questions? This action cannot be undone.`,
+      async () => {
+        // Fix: Convert Set to Array
+        const questionIds = Array.from(selectedQuestions);
+        let successCount = 0;
+        let errorCount = 0;
+        
+        for (const questionId of questionIds) {
+          try {
+            await deleteQuestion(questionId);
+            successCount++;
+          } catch (err) {
+            console.error("Error deleting question:", err);
+            errorCount++;
+          }
+        }
+        
+        setSelectedQuestions(new Set());
+        
+        if (errorCount === 0) {
+          showSuccess("Success!", `Successfully deleted ${successCount} questions.`);
+        } else {
+          showWarning("Partial Success", `Deleted ${successCount} questions. Failed to delete ${errorCount} questions.`);
+        }
+      },
+      { confirmText: "Yes, Delete All", cancelText: "Cancel" }
+    );
   };
 
   const toggleQuestionSelection = (questionId: string) => {
@@ -158,14 +184,27 @@ const ClientDashboard: React.FC = () => {
   }
 
   return (
-    <div className="min-h-screen bg-neutral-50">
-      <Header
-        courses={courses}
-        selectedCourseId={selectedCourseId}
-        onCourseChange={setSelectedCourseId}
-        onManageUsers={() => setShowUserManagement(true)}
-        onManageCourses={() => setShowCourseManagement(true)}
+    <>
+      <Modal
+        isOpen={modalState.isOpen}
+        onClose={closeModal}
+        onConfirm={modalState.onConfirm}
+        title={modalState.title}
+        message={modalState.message}
+        type={modalState.type}
+        confirmText={modalState.confirmText}
+        cancelText={modalState.cancelText}
+        showCancel={modalState.showCancel}
       />
+      
+      <div className="min-h-screen bg-neutral-50">
+        <Header
+          courses={courses}
+          selectedCourseId={selectedCourseId}
+          onCourseChange={setSelectedCourseId}
+          onManageUsers={() => setShowUserManagement(true)}
+          onManageCourses={() => setShowCourseManagement(true)}
+        />
 
       <div className="max-w-7xl mx-auto px-4 py-6">
         {/* Statistics Cards */}
@@ -271,7 +310,8 @@ const ClientDashboard: React.FC = () => {
           </div>
         )}
       </div>
-    </div>
+      </div>
+    </>
   );
 };
 

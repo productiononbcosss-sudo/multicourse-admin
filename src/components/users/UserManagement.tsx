@@ -1,8 +1,10 @@
 import React, { useState, useEffect } from 'react';
-import { X, UserPlus, Trash2, Edit2 } from 'lucide-react';
-import { collection, getDocs, addDoc, updateDoc, deleteDoc, doc, query, where } from 'firebase/firestore';
+import { X, Trash2, Edit2 } from 'lucide-react';
+import { collection, getDocs, updateDoc, deleteDoc, doc } from 'firebase/firestore';
 import { db } from '../../services/firebase';
 import { User, UserRole, Course } from '../../types';
+import { useModal } from '../../hooks/useModal';
+import Modal from '../common/Modal';
 
 interface UserManagementProps {
   courses: Course[];
@@ -14,6 +16,7 @@ const UserManagement: React.FC<UserManagementProps> = ({ courses, onClose }) => 
   const [loading, setLoading] = useState(true);
   const [showAddUser, setShowAddUser] = useState(false);
   const [editingUser, setEditingUser] = useState<User | null>(null);
+  const { modalState, showSuccess, showError, showInfo, showConfirm, closeModal } = useModal();
 
   // Form state
   const [email, setEmail] = useState('');
@@ -81,7 +84,7 @@ const UserManagement: React.FC<UserManagementProps> = ({ courses, onClose }) => 
       
       `💡 TIP: Keep this information and share it with the new user.`;
     
-    alert(instructions);
+    showInfo("User Registration Instructions", instructions);
     
     // Don't close the form so admin can copy the information
     // setShowAddUser(false);
@@ -103,34 +106,52 @@ const UserManagement: React.FC<UserManagementProps> = ({ courses, onClose }) => 
       resetForm();
       setEditingUser(null);
       fetchUsers();
+      showSuccess("Success!", "User updated successfully!");
     } catch (err) {
       console.error('Error updating user:', err);
-      setError('Failed to update user');
+      showError("Update Failed", "Failed to update user: " + (err as Error).message);
     }
   };
 
   const handleDeleteUser = async (userId: string) => {
-    if (!window.confirm('Are you sure you want to delete this user?')) return;
-
-    try {
-      await deleteDoc(doc(db, 'users', userId));
-      fetchUsers();
-    } catch (err) {
-      console.error('Error deleting user:', err);
-      setError('Failed to delete user');
-    }
+    showConfirm(
+      "Delete User",
+      "Are you sure you want to delete this user? This action cannot be undone.",
+      async () => {
+        try {
+          await deleteDoc(doc(db, 'users', userId));
+          fetchUsers();
+          showSuccess("Deleted", "User deleted successfully!");
+        } catch (err) {
+          console.error('Error deleting user:', err);
+          showError("Delete Failed", "Failed to delete user: " + (err as Error).message);
+        }
+      },
+      { confirmText: "Yes, Delete", cancelText: "Cancel" }
+    );
   };
 
   const handleToggleActive = async (user: User) => {
-    try {
-      await updateDoc(doc(db, 'users', user.uid), {
-        active: !user.active
-      });
-      fetchUsers();
-    } catch (err) {
-      console.error('Error toggling user status:', err);
-      setError('Failed to update user status');
-    }
+    const newStatus = !user.active;
+    const action = newStatus ? "activate" : "deactivate";
+    
+    showConfirm(
+      `${action.charAt(0).toUpperCase() + action.slice(1)} User`,
+      `Are you sure you want to ${action} ${user.displayName || user.email}?`,
+      async () => {
+        try {
+          await updateDoc(doc(db, 'users', user.uid), {
+            active: newStatus
+          });
+          fetchUsers();
+          showSuccess("Success!", `User ${action}d successfully!`);
+        } catch (err) {
+          console.error('Error toggling user status:', err);
+          showError("Update Failed", `Failed to ${action} user: ` + (err as Error).message);
+        }
+      },
+      { confirmText: `Yes, ${action.charAt(0).toUpperCase() + action.slice(1)}`, cancelText: "Cancel" }
+    );
   };
 
   const startEdit = (user: User) => {
@@ -158,8 +179,21 @@ const UserManagement: React.FC<UserManagementProps> = ({ courses, onClose }) => 
   };
 
   return (
-    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
-      <div className="bg-white rounded-lg shadow-xl max-w-4xl w-full max-h-[90vh] overflow-hidden">
+    <>
+      <Modal
+        isOpen={modalState.isOpen}
+        onClose={closeModal}
+        onConfirm={modalState.onConfirm}
+        title={modalState.title}
+        message={modalState.message}
+        type={modalState.type}
+        confirmText={modalState.confirmText}
+        cancelText={modalState.cancelText}
+        showCancel={modalState.showCancel}
+      />
+      
+      <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
+        <div className="bg-white rounded-lg shadow-xl max-w-4xl w-full max-h-[90vh] overflow-hidden">
         {/* Header */}
         <div className="bg-primary text-white px-6 py-4 flex justify-between items-center">
           <h2 className="text-xl font-bold">User Management</h2>
@@ -385,7 +419,8 @@ const UserManagement: React.FC<UserManagementProps> = ({ courses, onClose }) => 
           )}
         </div>
       </div>
-    </div>
+      </div>
+    </>
   );
 };
 

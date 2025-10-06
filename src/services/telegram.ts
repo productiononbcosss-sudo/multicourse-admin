@@ -31,7 +31,7 @@ export const getLessonInfo = (
   };
 };
 
-// Format message for Telegram
+// Format message for Telegram (All in Arabic)
 const formatTelegramMessage = (
   question: Question,
   answer: string,
@@ -51,10 +51,10 @@ const formatTelegramMessage = (
 📚 <b>${escapeHtml(chapterTitle)}</b>
 📖 ${escapeHtml(lessonTitle)}
 
-❓ <b>Question:</b>
+❓ <b>السؤال:</b>
 ${escapeHtml(question.questionText)}
 
-✅ <b>Answer:</b>
+✅ <b>الإجابة:</b>
 ${escapeHtml(answer)}
 
 ⏰ ${escapeHtml(question.dateSubmitted)} - ${escapeHtml(question.timeSubmitted)}
@@ -99,7 +99,7 @@ export const testTelegramConnection = async (
   channelId: string
 ): Promise<{ success: boolean; error?: string }> => {
   try {
-    const testMessage = '✅ Connection test successful!';
+    const testMessage = '✅ تم الاتصال بنجاح!';
     
     const response = await fetch(
       `https://api.telegram.org/bot${botToken}/sendMessage`,

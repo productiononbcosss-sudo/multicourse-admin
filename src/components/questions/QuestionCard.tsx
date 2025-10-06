@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { CheckCircle, Trash2, Send, AlertCircle } from 'lucide-react';
 import { Question, LessonInfo, CourseStructure } from '../../types';
+import { useLanguage } from '../../contexts/LanguageContext';
 
 interface QuestionCardProps {
   question: Question;
@@ -11,6 +12,7 @@ interface QuestionCardProps {
   onApprove?: (id: string) => Promise<void>;
   onDelete?: (id: string) => Promise<void>;
   onAnswer?: (answer: string) => Promise<void>;
+  onConfirmPublish?: (answer: string, callback: () => void) => void;
   telegramConfigured?: boolean;
 }
 
@@ -23,10 +25,21 @@ const QuestionCard: React.FC<QuestionCardProps> = ({
   onApprove,
   onDelete,
   onAnswer,
+  onConfirmPublish,
   telegramConfigured = false
 }) => {
   const [answerText, setAnswerText] = useState('');
   const [loading, setLoading] = useState(false);
+  
+  // Only use language context if user is instructor
+  let t: ((key: string) => string) | undefined;
+  try {
+    const lang = useLanguage();
+    t = lang.t;
+  } catch {
+    // Not in LanguageProvider context (client_support), use default English
+    t = undefined;
+  }
 
   // Get lesson info
   const getLessonInfo = (): LessonInfo => {
@@ -74,15 +87,32 @@ const QuestionCard: React.FC<QuestionCardProps> = ({
     }
   };
 
-  // Handle answer
+  // Handle answer with confirmation
   const handleAnswer = async () => {
     if (!onAnswer || !answerText.trim()) return;
-    setLoading(true);
-    try {
-      await onAnswer(answerText.trim());
-      setAnswerText('');
-    } finally {
-      setLoading(false);
+    
+    const answerToPublish = answerText.trim();
+    
+    // If confirmation callback is provided, use it
+    if (onConfirmPublish) {
+      onConfirmPublish(answerToPublish, async () => {
+        setLoading(true);
+        try {
+          await onAnswer(answerToPublish);
+          setAnswerText('');
+        } finally {
+          setLoading(false);
+        }
+      });
+    } else {
+      // Otherwise, publish directly
+      setLoading(true);
+      try {
+        await onAnswer(answerToPublish);
+        setAnswerText('');
+      } finally {
+        setLoading(false);
+      }
     }
   };
 
@@ -117,10 +147,10 @@ const QuestionCard: React.FC<QuestionCardProps> = ({
                 }`}
               >
                 {questionStatus === 'pending'
-                  ? '⏳ Pending'
+                  ? `⏳ ${t ? t('question.pending') : 'Pending'}`
                   : questionStatus === 'approved'
-                  ? '✓ Approved'
-                  : '✅ Answered'}
+                  ? `✓ ${t ? t('question.approved') : 'Approved'}`
+                  : `✅ ${t ? t('question.answered') : 'Answered'}`}
               </span>
               <span className="text-sm text-gray-500">
                 📅 {question.dateSubmitted} - ⏰ {question.timeSubmitted}
@@ -139,20 +169,20 @@ const QuestionCard: React.FC<QuestionCardProps> = ({
 
             {/* Question Text */}
             <div className="mb-4 p-4 bg-gray-50 rounded-lg border border-gray-200">
-              <p className="text-xs text-gray-500 mb-2 font-medium">❓ Question:</p>
+              <p className="text-xs text-gray-500 mb-2 font-medium">❓ {t ? t('question.question') : 'Question'}:</p>
               <p className="text-gray-800 leading-relaxed">{question.questionText}</p>
             </div>
 
             {/* Answer (if exists) */}
             {question.answer && (
               <div className="mt-4 p-4 bg-green-50 border border-green-200 rounded-lg">
-                <p className="text-sm font-semibold text-green-900 mb-2">✅ Answer:</p>
+                <p className="text-sm font-semibold text-green-900 mb-2">✅ {t ? t('question.answer') : 'Answer'}:</p>
                 <p className="text-gray-800 leading-relaxed whitespace-pre-wrap">
                   {question.answer}
                 </p>
                 {question.answeredAt && (
                   <p className="text-xs text-gray-500 mt-2">
-                    📤 Posted: {new Date(question.answeredAt as any).toLocaleString()}
+                    📤 {t ? t('question.posted') : 'Posted'}: {new Date(question.answeredAt as any).toLocaleString()}
                   </p>
                 )}
               </div>
@@ -190,7 +220,7 @@ const QuestionCard: React.FC<QuestionCardProps> = ({
                   <textarea
                     value={answerText}
                     onChange={(e) => setAnswerText(e.target.value)}
-                    placeholder="Write your answer here... It will be posted to Telegram channel"
+                    placeholder={t ? t('question.writePlaceholder') : 'Write your answer here... It will be posted to Telegram channel'}
                     className="w-full px-4 py-3 border border-gray-300 rounded-lg mb-2 min-h-[120px] focus:ring-2 focus:ring-green-500 focus:border-transparent resize-y"
                     disabled={loading}
                   />
@@ -200,12 +230,12 @@ const QuestionCard: React.FC<QuestionCardProps> = ({
                     className="flex items-center gap-2 bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded-lg text-sm disabled:opacity-50 disabled:cursor-not-allowed transition"
                   >
                     <Send size={16} />
-                    <span>{loading ? 'Publishing...' : 'Publish to Telegram'}</span>
+                    <span>{loading ? (t ? t('question.publishing') : 'Publishing...') : (t ? t('question.publish') : 'Publish to Telegram')}</span>
                   </button>
                   {!telegramConfigured && (
                     <p className="text-xs text-red-600 mt-2 flex items-center gap-1">
                       <AlertCircle size={14} />
-                      ⚠️ Please configure Telegram settings above
+                      ⚠️ {t ? t('question.telegramNotConfigured') : 'Please configure Telegram settings above'}
                     </p>
                   )}
                 </div>

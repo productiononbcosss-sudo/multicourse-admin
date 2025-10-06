@@ -3,6 +3,8 @@ import { X, Plus, Edit2, Trash2, CheckCircle, XCircle, Users } from 'lucide-reac
 import { deleteDoc, doc } from 'firebase/firestore';
 import { db } from '../../services/firebase';
 import { Course } from '../../types';
+import { useModal } from '../../hooks/useModal';
+import Modal from '../common/Modal';
 import CourseEditor from './CourseEditor';
 
 interface CourseManagementProps {
@@ -15,6 +17,7 @@ const CourseManagement: React.FC<CourseManagementProps> = ({ courses, onClose, o
   const [showEditor, setShowEditor] = useState(false);
   const [editingCourse, setEditingCourse] = useState<Course | null>(null);
   const [deleting, setDeleting] = useState<string | null>(null);
+  const { modalState, showSuccess, showError, showConfirm, closeModal } = useModal();
 
   const handleCreateCourse = () => {
     setEditingCourse(null);
@@ -27,20 +30,24 @@ const CourseManagement: React.FC<CourseManagementProps> = ({ courses, onClose, o
   };
 
   const handleDeleteCourse = async (courseId: string, courseName: string) => {
-    if (!window.confirm(`Are you sure you want to delete "${courseName}"?\n\nThis will NOT delete associated questions, but instructors will lose access to them.`)) {
-      return;
-    }
-
-    setDeleting(courseId);
-    try {
-      await deleteDoc(doc(db, 'courses', courseId));
-      onRefresh();
-    } catch (err) {
-      console.error('Error deleting course:', err);
-      alert('Failed to delete course. Please try again.');
-    } finally {
-      setDeleting(null);
-    }
+    showConfirm(
+      "Delete Course",
+      `Are you sure you want to delete "${courseName}"?\n\nThis will NOT delete associated questions, but instructors will lose access to them.`,
+      async () => {
+        setDeleting(courseId);
+        try {
+          await deleteDoc(doc(db, 'courses', courseId));
+          onRefresh();
+          showSuccess("Deleted", `Course "${courseName}" deleted successfully!`);
+        } catch (err) {
+          console.error('Error deleting course:', err);
+          showError("Delete Failed", "Failed to delete course. Please try again.");
+        } finally {
+          setDeleting(null);
+        }
+      },
+      { confirmText: "Yes, Delete", cancelText: "Cancel" }
+    );
   };
 
   const handleCloseEditor = () => {
@@ -54,8 +61,21 @@ const CourseManagement: React.FC<CourseManagementProps> = ({ courses, onClose, o
   }
 
   return (
-    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
-      <div className="bg-white rounded-lg shadow-xl max-w-5xl w-full max-h-[90vh] overflow-hidden">
+    <>
+      <Modal
+        isOpen={modalState.isOpen}
+        onClose={closeModal}
+        onConfirm={modalState.onConfirm}
+        title={modalState.title}
+        message={modalState.message}
+        type={modalState.type}
+        confirmText={modalState.confirmText}
+        cancelText={modalState.cancelText}
+        showCancel={modalState.showCancel}
+      />
+      
+      <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
+        <div className="bg-white rounded-lg shadow-xl max-w-5xl w-full max-h-[90vh] overflow-hidden">
         {/* Header */}
         <div className="bg-primary text-white px-6 py-4 flex justify-between items-center">
           <h2 className="text-xl font-bold">Course Management</h2>
@@ -174,7 +194,8 @@ const CourseManagement: React.FC<CourseManagementProps> = ({ courses, onClose, o
           )}
         </div>
       </div>
-    </div>
+      </div>
+    </>
   );
 };
 
